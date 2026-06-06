@@ -30,7 +30,8 @@ export const styleRules: Rule[] = [
       const matches = doc.match('#Noun #Noun #Noun #Noun+');
       matches.forEach((m: any) => {
         const str = m.text();
-        const offset = text.indexOf(str);
+        const json = m.json({ offset: true });
+        const offset = json[0]?.offset?.start ?? text.indexOf(str);
         if (offset !== -1) {
           issues.push({
             id: `noun-string-${offset}`,
@@ -59,7 +60,8 @@ export const styleRules: Rule[] = [
       const matches = doc.match('^#Conjunction');
       matches.forEach((m: any) => {
         const str = m.text();
-        const offset = text.indexOf(str);
+        const json = m.json({ offset: true });
+        const offset = json[0]?.offset?.start ?? text.indexOf(str);
         if (offset !== -1 && (str.toLowerCase() === 'and ' || str.toLowerCase() === 'but ')) {
           issues.push({
             id: `conjunction-start-${offset}`,

@@ -447,7 +447,11 @@ async function getProviders() {
     const data = await response.json();
     return data.providers || [];
   } catch (error) {
-    console.error('Failed to fetch providers:', error);
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.debug(`[OpenGrammar] Backend is offline or unreachable at the configured URL.`);
+    } else {
+      console.error('Failed to fetch providers:', error);
+    }
     return [];
   }
 }
@@ -464,7 +468,11 @@ async function getModels(provider: string, apiKey?: string, baseUrl?: string) {
     const data = await response.json();
     return data.models || [];
   } catch (error) {
-    console.error('Failed to fetch models:', error);
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.debug(`[OpenGrammar] Backend is offline or unreachable at the configured URL.`);
+    } else {
+      console.error('Failed to fetch models:', error);
+    }
     return [];
   }
 }

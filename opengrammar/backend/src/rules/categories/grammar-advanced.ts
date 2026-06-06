@@ -231,21 +231,22 @@ export const advancedGrammarRules: Rule[] = [
       ];
 
       for (const word of introWords) {
-        const regex = new RegExp(`(?:^|[.!?]\\s+)${word}\\s+(?!,)([A-Za-z])`, 'gi');
+        const regex = new RegExp(`(?:^|[.!?]\\s+)(${word})\\s+(?!,)([A-Za-z])`, 'gi');
         let match: RegExpExecArray | null;
         while ((match = regex.exec(text)) !== null) {
-          const wordStart = text.indexOf(word, match.index);
-          if (wordStart >= 0) {
-            issues.push({
-              id: `intro-comma-${wordStart}`,
-              type: 'grammar',
-              original: `${word} ${match[1]}`,
-              suggestion: `${word}, ${match[1]}`,
-              reason: `Add a comma after the introductory word "${word}".`,
-              offset: wordStart,
-              length: word.length + 2,
-            });
-          }
+          const matchedWord = match[1]!;
+          const nextChar = match[2]!;
+          const wordStart = match.index + match[0].indexOf(matchedWord);
+          
+          issues.push({
+            id: `intro-comma-${wordStart}`,
+            type: 'grammar',
+            original: `${matchedWord} ${nextChar}`,
+            suggestion: `${matchedWord}, ${nextChar}`,
+            reason: `Add a comma after the introductory word "${matchedWord}".`,
+            offset: wordStart,
+            length: matchedWord.length + 1 + nextChar.length,
+          });
         }
       }
       return issues;
