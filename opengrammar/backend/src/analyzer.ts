@@ -103,9 +103,6 @@ const ADJECTIVE_PARTICIPLES = new Set([
 ]);
 
 export class RuleBasedAnalyzer {
-  private static dictionary: Set<string> = new Set();
-  private static customRules: CustomRule[] = [];
-
   static analyze(
     text: string,
     options?: {
@@ -117,20 +114,15 @@ export class RuleBasedAnalyzer {
   ): Issue[] {
     const issues: Issue[] = [];
 
-    if (options?.dictionary) {
-      RuleBasedAnalyzer.dictionary = new Set(options.dictionary.map((w) => w.toLowerCase()));
-    }
-
-    if (options?.customRules) {
-      RuleBasedAnalyzer.customRules = options.customRules;
-    }
+    const userDictionary = options?.dictionary ? new Set(options.dictionary.map((w) => w.toLowerCase())) : undefined;
+    const customRules = options?.customRules || [];
 
     // Dictionary-based spell checking (unless spelling module is disabled)
     const isSpellingDisabled = options?.disabledModules?.some(
       (m) => m.toLowerCase() === 'spelling',
     );
     if (!isSpellingDisabled) {
-      issues.push(...checkSpelling(text, RuleBasedAnalyzer.dictionary));
+      issues.push(...checkSpelling(text, userDictionary));
     }
 
     // Initialize NLP Engine for Syntax Checks
@@ -164,7 +156,7 @@ export class RuleBasedAnalyzer {
     }
 
     // Custom Rules (Runtime injections)
-    issues.push(...RuleBasedAnalyzer.checkCustomRules(text));
+    issues.push(...RuleBasedAnalyzer.checkCustomRules(text, customRules));
 
     // Deduplicate: when multiple rules flag the same text span,
     // keep the highest-priority match (grammar > spelling > clarity > style)
@@ -253,9 +245,9 @@ export class RuleBasedAnalyzer {
     return false;
   }
 
-  private static checkCustomRules(text: string): Issue[] {
+  private static checkCustomRules(text: string, customRules: CustomRule[]): Issue[] {
     const issues: Issue[] = [];
-    for (const rule of RuleBasedAnalyzer.customRules) {
+    for (const rule of customRules) {
       try {
         const regex = new RegExp(rule.pattern, 'gi');
         let match: RegExpExecArray | null;

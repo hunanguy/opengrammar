@@ -230,22 +230,25 @@ export const readabilityRules: Rule[] = [
     suggestion: 'Consider breaking this into shorter sentences.',
     check: (text: string): Issue[] => {
       const issues: Issue[] = [];
-      const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
-      let offset = 0;
-      for (const sentence of sentences) {
-        const wordCount = sentence.trim().split(/\s+/).length;
+      const regex = /[^.!?]+[.!?]+/g;
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        const sentence = match[0];
+        const trimmedSentence = sentence.trimStart();
+        const trimDiff = sentence.length - trimmedSentence.length;
+        const wordCount = trimmedSentence.trimEnd().split(/\s+/).length;
+        
         if (wordCount > 40) {
           issues.push({
-            id: `RD_long_sentence-${offset}`,
+            id: `RD_long_sentence-${match.index + trimDiff}`,
             type: 'clarity',
-            original: sentence.trim().substring(0, 60) + '...',
+            original: trimmedSentence.substring(0, 60) + '...',
             suggestion: 'Consider breaking this into shorter sentences.',
             reason: `This sentence has ${wordCount} words. Sentences over 40 words are difficult to read.`,
-            offset,
-            length: sentence.length,
+            offset: match.index + trimDiff,
+            length: trimmedSentence.trimEnd().length,
           });
         }
-        offset += sentence.length;
       }
       return issues;
     },
@@ -261,31 +264,35 @@ export const readabilityRules: Rule[] = [
     suggestion: 'Vary your sentence openings.',
     check: (text: string): Issue[] => {
       const issues: Issue[] = [];
-      const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+      const regex = /[^.!?]+[.!?]+/g;
+      const sentences: { text: string; offset: number; length: number }[] = [];
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        sentences.push({ text: match[0], offset: match.index, length: match[0].length });
+      }
+
       if (sentences.length < 3) return issues;
 
-      let offset = 0;
       for (let i = 2; i < sentences.length; i++) {
         const getStart = (s: string) => (s.trim().split(/\s+/)[0] || '').toLowerCase();
-        const w1 = getStart(sentences[i - 2] || '');
-        const w2 = getStart(sentences[i - 1] || '');
-        const w3 = getStart(sentences[i] || '');
+        const w1 = getStart(sentences[i - 2]!.text);
+        const w2 = getStart(sentences[i - 1]!.text);
+        const w3 = getStart(sentences[i]!.text);
 
         if (w1 && w1 === w2 && w2 === w3 && !['the', 'a', 'an', 'i'].includes(w1)) {
-          const sentenceOffset = text.indexOf((sentences[i] || '').trim(), offset);
-          if (sentenceOffset >= 0) {
-            issues.push({
-              id: `RD_repeated_starts-${sentenceOffset}`,
-              type: 'style',
-              original: (sentences[i] || '').trim().substring(0, 40) + '...',
-              suggestion: 'Vary your sentence openings for better flow.',
-              reason: `Three consecutive sentences start with "${w1}". Vary your sentence beginnings.`,
-              offset: sentenceOffset,
-              length: (sentences[i] || '').trim().length,
-            });
-          }
+          const trimmedSentence = sentences[i]!.text.trimStart();
+          const trimDiff = sentences[i]!.text.length - trimmedSentence.length;
+          
+          issues.push({
+            id: `RD_repeated_starts-${sentences[i]!.offset}`,
+            type: 'style',
+            original: trimmedSentence.substring(0, 40) + '...',
+            suggestion: 'Vary your sentence openings for better flow.',
+            reason: `Three consecutive sentences start with "${w1}". Vary your sentence beginnings.`,
+            offset: sentences[i]!.offset + trimDiff,
+            length: trimmedSentence.trimEnd().length,
+          });
         }
-        offset += (sentences[i - 2] || '').length;
       }
       return issues;
     },

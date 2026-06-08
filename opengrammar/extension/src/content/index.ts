@@ -396,10 +396,37 @@ function handleKeyDown(event: Event) {
  */
 function handleGrammarSuccess(element: HTMLElement, text: string, issues: Issue[]) {
   const editableElement = activeElements.get(element);
+  
+  // Ignore stale results if the text has changed since the request was made
+  if (extractText(element) !== text) {
+    return;
+  }
+
   if (issues && issues.length > 0) {
     if (editableElement) editableElement.lastIssues = issues;
     void syncActiveContext(text, issues);
+    if (editableElement && editableElement.observer) {
+      editableElement.observer.disconnect();
+    }
+    
+    // Save caret position before modifying the DOM
+    const savedCaret = getCaretPosition(element);
+
     highlightIssues(element, issues);
+
+    // Restore caret position after highlighting
+    if (element.tagName !== 'INPUT' && element.tagName !== 'TEXTAREA') {
+      setCaretPosition(element, savedCaret);
+    }
+
+    if (editableElement && editableElement.observer) {
+      editableElement.lastText = extractText(element);
+      editableElement.observer.observe(element, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
 
     const statsPerType = { grammar: 0, spelling: 0, clarity: 0, style: 0 };
     for (const issue of issues) {
@@ -428,7 +455,25 @@ function handleGrammarSuccess(element: HTMLElement, text: string, issues: Issue[
       payload: { wordsChecked: wordCount, issuesFound: issues.length, issuesFixed: 0, writingScore, errorTypes },
     });
   } else {
-    if (editableElement) editableElement.lastIssues = [];
+    if (editableElement) {
+      editableElement.lastIssues = [];
+      if (editableElement.observer) editableElement.observer.disconnect();
+    }
+    
+    // Save caret position before clearing highlights (DOM mutation)
+    const savedCaret = getCaretPosition(element);
+    
+    clearHighlights();
+    
+    // Restore caret position after clearing highlights
+    if (element.tagName !== 'INPUT' && element.tagName !== 'TEXTAREA') {
+      setCaretPosition(element, savedCaret);
+    }
+    
+    if (editableElement && editableElement.observer) {
+      editableElement.lastText = extractText(element);
+      editableElement.observer.observe(element, { childList: true, characterData: true, subtree: true });
+    }
     void syncActiveContext(text, []);
     void chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_COUNT', count: 0 });
   }
@@ -444,7 +489,13 @@ const checkGrammar = async (element: HTMLElement) => {
 
   const text = extractText(element);
   if (!text || text.trim().length < 5) {
+    const editableElement = activeElements.get(element);
+    if (editableElement?.observer) editableElement.observer.disconnect();
     clearHighlights();
+    if (editableElement?.observer) {
+      editableElement.lastText = extractText(element);
+      editableElement.observer.observe(element, { childList: true, characterData: true, subtree: true });
+    }
     return;
   }
 

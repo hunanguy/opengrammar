@@ -1,6 +1,10 @@
 import { getEnglishDictionary } from './dictionary.js';
 import type { Issue } from './shared-types.js';
 
+const v0 = new Uint8Array(64);
+const v1 = new Uint8Array(64);
+const v2 = new Uint8Array(64);
+
 /**
  * Levenshtein distance between two strings.
  * Used to find the closest dictionary words for a misspelled word.
@@ -9,7 +13,6 @@ function levenshtein(a: string, b: string): number {
   const la = a.length;
   const lb = b.length;
 
-  // Early exits
   if (la === 0) return lb;
   if (lb === 0) return la;
   if (a === b) return 0;
@@ -17,32 +20,30 @@ function levenshtein(a: string, b: string): number {
   // Fast path: if lengths differ by more than max edit distance, skip
   if (Math.abs(la - lb) > 2) return Math.abs(la - lb);
 
-  const matrix: number[][] = [];
+  for (let i = 0; i <= lb; i++) v0[i] = i;
 
-  for (let i = 0; i <= la; i++) {
-    matrix[i] = [i];
-  }
-  for (let j = 0; j <= lb; j++) {
-    matrix[0]![j] = j;
-  }
-
-  for (let i = 1; i <= la; i++) {
-    for (let j = 1; j <= lb; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i]![j] = Math.min(
-        matrix[i - 1]![j]! + 1, // deletion
-        matrix[i]![j - 1]! + 1, // insertion
-        matrix[i - 1]![j - 1]! + cost, // substitution
-      );
+  for (let i = 0; i < la; i++) {
+    v1[0] = i + 1;
+    for (let j = 0; j < lb; j++) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      let min = v1[j]! + 1; // insertion
+      if (v0[j + 1]! + 1 < min) min = v0[j + 1]! + 1; // deletion
+      if (v0[j]! + cost < min) min = v0[j]! + cost; // substitution
 
       // Transposition (Damerau extension)
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-        matrix[i]![j] = Math.min(matrix[i]![j]!, matrix[i - 2]![j - 2]! + cost);
+      if (i > 0 && j > 0 && a[i] === b[j - 1] && a[i - 1] === b[j]) {
+        if (v2[j - 1]! + cost < min) min = v2[j - 1]! + cost;
       }
+      
+      v1[j + 1] = min;
+    }
+    for (let j = 0; j <= lb; j++) {
+      v2[j] = v0[j]!;
+      v0[j] = v1[j]!;
     }
   }
 
-  return matrix[la]![lb]!;
+  return v1[lb]!;
 }
 
 /**
@@ -296,6 +297,24 @@ function getSoundexCache(dictionary: Set<string>): Map<string, string> {
   return _soundexCache;
 }
 
+let _lengthIndexCache: Map<number, string[]> | null = null;
+
+function getLengthIndex(dictionary: Set<string>): Map<number, string[]> {
+  if (!_lengthIndexCache) {
+    _lengthIndexCache = new Map();
+    for (const word of dictionary) {
+      const len = word.length;
+      let list = _lengthIndexCache.get(len);
+      if (!list) {
+        list = [];
+        _lengthIndexCache.set(len, list);
+      }
+      list.push(word);
+    }
+  }
+  return _lengthIndexCache;
+}
+
 /**
  * Find the best spelling suggestions for a misspelled word.
  * Uses Levenshtein distance + Soundex phonetic matching.
@@ -309,24 +328,28 @@ function findSuggestions(
   const len = lower.length;
   const wordSoundex = soundex(lower);
   const soundexMap = getSoundexCache(dictionary);
+  const lengthIndex = getLengthIndex(dictionary);
 
   // Candidates: words with similar length and either similar sound or close edit distance
   const candidates: Array<{ word: string; distance: number; score: number }> = [];
 
-  for (const dictWord of dictionary) {
-    // Quick length filter: skip words with very different lengths
-    if (Math.abs(dictWord.length - len) > 2) continue;
+  for (let l = Math.max(1, len - 2); l <= len + 2; l++) {
+    const list = lengthIndex.get(l);
+    if (!list) continue;
 
-    // Prioritize words that start with the same letter
-    const sameStart = dictWord[0] === lower[0];
-    if (!sameStart && Math.abs(dictWord.length - len) > 1) continue;
+    for (let i = 0; i < list.length; i++) {
+      const dictWord = list[i]!;
+      
+      const sameStart = dictWord[0] === lower[0];
+      if (!sameStart && Math.abs(l - len) > 1) continue;
 
-    const dist = levenshtein(lower, dictWord);
-    if (dist <= 2) {
-      // Phonetic bonus
-      const phoneticMatch = soundexMap.get(dictWord) === wordSoundex;
-      const score = dist - (phoneticMatch ? 0.5 : 0) - (sameStart ? 0.3 : 0);
-      candidates.push({ word: dictWord, distance: dist, score });
+      const dist = levenshtein(lower, dictWord);
+      if (dist <= 2) {
+        // Phonetic bonus
+        const phoneticMatch = soundexMap.get(dictWord) === wordSoundex;
+        const score = dist - (phoneticMatch ? 0.5 : 0) - (sameStart ? 0.3 : 0);
+        candidates.push({ word: dictWord, distance: dist, score });
+      }
     }
   }
 
