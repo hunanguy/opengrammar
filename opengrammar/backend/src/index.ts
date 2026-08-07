@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import type { Context, Next } from 'hono';
 import OpenAI from 'openai';
 import { LLMAnalyzer, RuleBasedAnalyzer } from './analyzer.js';
 import { analyzeTone } from './nlp/tone-analyzer.js';
@@ -21,6 +22,22 @@ const app = new Hono();
 // Middleware
 app.use('/*', logger());
 app.use('/*', cors());
+
+// Append charset=utf-8 to JSON responses that don't declare one.
+// Content-Type is case-insensitive: media type and charset parameter are
+// matched case-insensitively so an existing "Charset=iso-8859-1" is preserved
+// instead of appending a conflicting charset.
+export async function ensureJsonUtf8(c: Context, next: Next) {
+  await next();
+  const ct = c.res.headers.get('Content-Type') ?? '';
+  const [mediaType, ...parameters] = ct.split(';');
+  const hasCharset = parameters.some((p) => /^\s*charset\s*=/i.test(p));
+  if (mediaType.trim().toLowerCase() === 'application/json' && !hasCharset) {
+    c.res.headers.set('Content-Type', ct + '; charset=utf-8');
+  }
+}
+
+app.use('/*', ensureJsonUtf8);
 
 // Root Landing Page
 app.get('/', (c) => {
