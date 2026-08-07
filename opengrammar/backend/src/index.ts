@@ -21,6 +21,13 @@ const app = new Hono();
 // Middleware
 app.use('/*', logger());
 app.use('/*', cors());
+app.use('/*', async (c, next) => {
+  await next();
+  const ct = c.res.headers.get('Content-Type') ?? '';
+  if (ct.startsWith('application/json') && !ct.includes('charset')) {
+    c.res.headers.set('Content-Type', ct + '; charset=utf-8');
+  }
+});
 
 // Root Landing Page
 app.get('/', (c) => {
