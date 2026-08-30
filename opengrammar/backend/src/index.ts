@@ -581,11 +581,12 @@ app.post('/analyze', async (c) => {
     // Run LLM analysis if API key provided or using local Ollama
     if (apiKey || provider === 'ollama') {
       try {
-        const llmProvider = (provider || 'openai') as LLMProvider;
+        const llmProvider = (provider || 'openrouter') as LLMProvider;
+        const llmModel = model || 'openai/gpt-4o-mini';
         const llmIssues = await LLMAnalyzer.analyze(
           text,
           apiKey || '',
-          model || 'gpt-3.5-turbo',
+          llmModel,
           llmProvider,
           baseUrl,
           context,
@@ -662,7 +663,7 @@ app.post('/rephrase', async (c) => {
       model?: string;
       baseUrl?: string;
     };
-    const { sentence, goal = 'clarity', apiKey, provider = 'groq', model, baseUrl } = body;
+    const { sentence, goal = 'clarity', apiKey, provider = 'openrouter', model, baseUrl } = body;
 
     if (!sentence || typeof sentence !== 'string') {
       return c.json({ error: 'sentence is required' }, 400);
@@ -697,7 +698,7 @@ app.post('/autocomplete', async (c) => {
     }
 
     const safeCursor = Math.max(0, Math.min(cursor ?? text.length, text.length));
-    const providerId = (provider || 'openai') as LLMProvider;
+    const providerId = (provider || 'openrouter') as LLMProvider;
 
     if (apiKey || providerId === 'ollama') {
       const completion = await getLlmAutocomplete(
@@ -738,7 +739,7 @@ app.post('/rewrite', async (c) => {
       return c.json({ error: 'Text and tone are required' }, 400);
     }
 
-    const providerBaseUrl = baseUrl || getProviderBaseUrl(provider || 'openai');
+    const providerBaseUrl = baseUrl || getProviderBaseUrl(provider || 'openrouter');
 
     const openai = new (await import('openai')).OpenAI({
       apiKey: apiKey || 'ollama',
@@ -764,7 +765,7 @@ app.post('/rewrite', async (c) => {
         },
         { role: 'user', content: text },
       ],
-      model: model || 'gpt-3.5-turbo',
+      model: model || 'openai/gpt-4o-mini',
       temperature: 0.7,
       max_tokens: 1000,
     });
@@ -814,7 +815,7 @@ function getProviderBaseUrl(provider: string): string {
     ollama: 'http://localhost:11434/v1',
     custom: '',
   };
-  return urls[provider as string] ?? urls.openai;
+  return urls[provider as string] ?? urls.openrouter;
 }
 
 function enrichIssues(
@@ -937,7 +938,7 @@ async function getLlmAutocomplete(
         }),
       },
     ],
-    model: model || 'gpt-4o-mini',
+    model: model || 'openai/gpt-4o-mini',
     response_format: { type: 'json_object' },
     max_tokens: 80,
     temperature: 0.5,
